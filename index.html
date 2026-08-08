@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Suivi Sport</title>
+<meta name="theme-color" content="#f97316">
+<meta name="description" content="Suivi personnel des séances de sport : cardio, renforcement musculaire et poids.">
+
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Suivi Sport">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex, nofollow">
+
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Suivi Sport</h1>
+  <button id="btn-settings" class="icon-btn" aria-label="Réglages" type="button">⚙️</button>
+</header>
+
+<main id="views">
+
+  <!-- ===================== VUE SÉANCE ===================== -->
+  <section id="view-seance" class="view" data-view="seance">
+    <div id="weight-reminder" class="banner banner-hidden"></div>
+
+    <form id="form-seance">
+      <div class="field-row">
+        <label for="input-date">Date</label>
+        <input type="date" id="input-date" required>
+      </div>
+      <div class="field-row">
+        <label for="input-warmup">Échauffement (min)</label>
+        <input type="number" id="input-warmup" inputmode="numeric" min="0" placeholder="0">
+      </div>
+
+      <div class="section-block">
+        <div class="section-head">
+          <h2>Cardio</h2>
+          <button type="button" id="btn-add-cardio" class="btn-add">+ Ajouter</button>
+        </div>
+        <div id="cardio-list" class="entry-list"></div>
+      </div>
+
+      <div class="section-block">
+        <div class="section-head">
+          <h2>Renforcement</h2>
+          <button type="button" id="btn-add-strength" class="btn-add">+ Ajouter</button>
+        </div>
+        <div id="strength-list" class="entry-list"></div>
+      </div>
+
+      <div class="field-row">
+        <label for="input-note">Note (optionnel)</label>
+        <textarea id="input-note" rows="2" placeholder="Fatigue, forme du jour, douleur..."></textarea>
+      </div>
+
+      <button type="submit" id="btn-save-session" class="btn-primary">Enregistrer la séance</button>
+    </form>
+  </section>
+
+  <!-- ===================== VUE HISTORIQUE ===================== -->
+  <section id="view-historique" class="view view-hidden" data-view="historique">
+    <div id="historique-list" class="history-list"></div>
+  </section>
+
+  <!-- ===================== VUE STATS ===================== -->
+  <section id="view-stats" class="view view-hidden" data-view="stats">
+    <div class="stats-block">
+      <h2>Volume total</h2>
+      <div class="segmented" id="volume-range">
+        <button type="button" class="seg-btn active" data-range="week">Semaine</button>
+        <button type="button" class="seg-btn" data-range="month">Mois</button>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-volume"></canvas></div>
+    </div>
+
+    <div class="stats-block">
+      <h2>Progression par machine</h2>
+      <select id="select-machine-stats"></select>
+      <div class="chart-wrap"><canvas id="chart-machine"></canvas></div>
+    </div>
+
+    <div class="stats-block">
+      <h2>Évolution cardio</h2>
+      <select id="select-cardio-stats"></select>
+      <div class="chart-wrap"><canvas id="chart-cardio"></canvas></div>
+    </div>
+
+    <div class="stats-block">
+      <h2>Poids</h2>
+      <div class="chart-wrap"><canvas id="chart-weight"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ===================== VUE POIDS ===================== -->
+  <section id="view-poids" class="view view-hidden" data-view="poids">
+    <form id="form-poids" class="field-row">
+      <label for="input-weight">Poids (kg)</label>
+      <input type="number" id="input-weight" step="0.1" inputmode="decimal" placeholder="0.0">
+      <button type="submit" class="btn-primary">Ajouter la pesée</button>
+    </form>
+    <div id="weight-list" class="history-list"></div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button class="tab-btn active" data-view="seance" type="button"><span>🏋️</span>Séance</button>
+  <button class="tab-btn" data-view="historique" type="button"><span>📅</span>Historique</button>
+  <button class="tab-btn" data-view="stats" type="button"><span>📊</span>Stats</button>
+  <button class="tab-btn" data-view="poids" type="button"><span>⚖️</span>Poids</button>
+</nav>
+
+<!-- ===================== SHEET GÉNÉRIQUE (machines, réglages) ===================== -->
+<div id="sheet-overlay" class="sheet-overlay sheet-hidden">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="sheet-title">Titre</h2>
+      <button type="button" id="sheet-close" class="icon-btn" aria-label="Fermer">✕</button>
+    </div>
+    <div id="sheet-body" class="sheet-body"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast toast-hidden"></div>
+
+<script src="js/vendor/chart.min.js"></script>
+<script src="js/db.js"></script>
+<script src="js/seed.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
