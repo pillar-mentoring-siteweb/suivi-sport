@@ -41,20 +41,18 @@
         <input type="number" id="input-warmup" inputmode="numeric" min="0" placeholder="0">
       </div>
 
-      <div class="section-block">
-        <div class="section-head">
-          <h2>Cardio</h2>
-          <button type="button" id="btn-add-cardio" class="btn-add">+ Ajouter</button>
-        </div>
-        <div id="cardio-list" class="entry-list"></div>
+      <div class="category" data-type="cardio">
+        <button type="button" class="category-toggle">
+          <span>Cardio</span><span class="chevron">▾</span>
+        </button>
+        <div id="cardio-list" class="category-body"></div>
       </div>
 
-      <div class="section-block">
-        <div class="section-head">
-          <h2>Renforcement</h2>
-          <button type="button" id="btn-add-strength" class="btn-add">+ Ajouter</button>
-        </div>
-        <div id="strength-list" class="entry-list"></div>
+      <div class="category" data-type="strength">
+        <button type="button" class="category-toggle">
+          <span>Renforcement</span><span class="chevron">▾</span>
+        </button>
+        <div id="strength-list" class="category-body"></div>
       </div>
 
       <div class="field-row">

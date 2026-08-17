@@ -94,6 +94,8 @@ async function boot() {
   bindSettings();
   bindStatsControls();
 
+  renderMachineRows('cardio');
+  renderMachineRows('strength');
   renderHistory();
   renderWeights();
   updateWeightReminder();
@@ -159,94 +161,246 @@ function closeSheet() {
    Séance — form building blocks
    ============================================================ */
 function bindSessionForm() {
-  $('#btn-add-cardio').addEventListener('click', () => addCardioCard());
-  $('#btn-add-strength').addEventListener('click', () => addStrengthCard());
+  $all('.category-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => btn.closest('.category').classList.toggle('open'));
+  });
   $('#form-seance').addEventListener('submit', onSubmitSession);
 }
 
-function makeChipRow(items, onPick, extraLabel) {
-  const row = document.createElement('div');
-  row.className = 'chip-row';
-  items.forEach((m) => {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'chip';
-    chip.textContent = m.name;
-    chip.dataset.machine = m.name;
-    chip.addEventListener('click', () => {
-      row.querySelectorAll('.chip').forEach((c) => c.classList.remove('selected'));
-      chip.classList.add('selected');
-      onPick(m.name);
-    });
-    row.appendChild(chip);
-  });
-  const newChip = document.createElement('button');
-  newChip.type = 'button';
-  newChip.className = 'chip';
-  newChip.textContent = extraLabel || '+ Nouvelle';
-  row.appendChild(newChip);
-  const customInput = document.createElement('input');
-  customInput.type = 'text';
-  customInput.placeholder = 'Nom de la machine';
-  customInput.style.display = 'none';
-  customInput.style.marginTop = '8px';
-  newChip.addEventListener('click', () => {
-    row.querySelectorAll('.chip').forEach((c) => c.classList.remove('selected'));
-    customInput.style.display = 'block';
-    customInput.focus();
-  });
-  customInput.addEventListener('input', () => onPick(customInput.value.trim()));
-  const wrap = document.createElement('div');
-  wrap.appendChild(row);
-  wrap.appendChild(customInput);
-  return wrap;
-}
-
-function lastEntryForMachine(machineName, kind) {
+function lastEntry(machineName, type) {
   for (const s of state.sessions) {
-    const list = kind === 'cardio' ? s.cardio : s.strength;
+    const list = type === 'cardio' ? s.cardio : s.strength;
     const found = (list || []).find((e) => e.machine.toLowerCase() === machineName.toLowerCase());
-    if (found) return found;
+    if (found) return { entry: found, date: s.date };
   }
   return null;
 }
 
-function addCardioCard() {
-  const card = document.createElement('div');
-  card.className = 'entry-card';
-  card.innerHTML = `
-    <div class="entry-card-head">
-      <strong>Cardio</strong>
-      <button type="button" class="entry-remove" aria-label="Supprimer">✕</button>
-    </div>
-  `;
-  const chips = makeChipRow(machinesByType('cardio'), (name) => { card.dataset.machine = name; prefillCardio(card, name); });
-  const grid = document.createElement('div');
-  grid.className = 'entry-grid';
-  grid.innerHTML = `
-    <div class="field-row"><label>Durée (min)</label><input type="number" class="f-duration" inputmode="numeric" min="0"></div>
-    <div class="field-row"><label>Distance (km)</label><input type="number" class="f-distance" step="0.01" inputmode="decimal" min="0"></div>
-    <div class="field-row"><label>Calories</label><input type="number" class="f-calories" inputmode="numeric" min="0"></div>
-    <div class="field-row"><label>Watts moyens</label><input type="number" class="f-watts" inputmode="numeric" min="0"></div>
-    <div class="field-row"><label>Vitesse moy. (km/h)</label><input type="number" class="f-speed" step="0.1" inputmode="decimal" min="0"></div>
-    <div class="field-row"><label>Inclinaison (%)</label><input type="number" class="f-incline" step="0.1" inputmode="decimal" min="0"></div>
-  `;
-  card.appendChild(chips);
-  card.appendChild(grid);
-  card.querySelector('.entry-remove').addEventListener('click', () => card.remove());
-  $('#cardio-list').appendChild(card);
+function formatCardioSummary(entry) {
+  const parts = [];
+  if (entry.durationMin) parts.push(`${entry.durationMin} min`);
+  if (entry.distanceKm) parts.push(`${entry.distanceKm} km`);
+  if (entry.calories) parts.push(`${entry.calories} cal`);
+  if (entry.avgWatts) parts.push(`${entry.avgWatts} W`);
+  if (entry.avgSpeed) parts.push(`${entry.avgSpeed} km/h`);
+  if (entry.avgIncline) parts.push(`${entry.avgIncline}% incl.`);
+  return parts.join(' / ');
 }
 
-function prefillCardio(card, name) {
-  const last = lastEntryForMachine(name, 'cardio');
-  if (!last) return;
-  const set = (cls, val) => { const el = card.querySelector(cls); if (el && val !== null && val !== undefined) el.value = val; };
-  set('.f-duration', last.durationMin);
-  set('.f-distance', last.distanceKm);
-  set('.f-calories', last.calories);
-  set('.f-watts', last.avgWatts);
-  set('.f-speed', last.avgSpeed);
-  set('.f-incline', last.avgIncline);
+function formatStrengthSummary(entry) {
+  const leg = entry.perLeg ? ' chaque jambe' : '';
+  return `${entry.weightKg}kg — ${entry.series}x${entry.reps}${leg}`;
+}
+
+function readRowEntry(row, type) {
+  if (type === 'cardio') {
+    return {
+      machine: row.dataset.machine,
+      durationMin: num(row.querySelector('.f-duration').value),
+      distanceKm: num(row.querySelector('.f-distance').value),
+      calories: num(row.querySelector('.f-calories').value),
+      avgWatts: num(row.querySelector('.f-watts').value),
+      avgSpeed: num(row.querySelector('.f-speed').value),
+      avgIncline: num(row.querySelector('.f-incline').value),
+    };
+  }
+  return {
+    machine: row.dataset.machine,
+    weightKg: num(row.querySelector('.f-weight').value) || 0,
+    series: num(row.querySelector('.f-series').value) || 0,
+    reps: num(row.querySelector('.f-reps').value) || 0,
+    perLeg: row.querySelector('.f-perleg').checked,
+  };
+}
+
+function updateRowSummary(row, type) {
+  const summaryEl = row.querySelector('.machine-summary');
+  if (!summaryEl) return;
+  if (row.dataset.touched !== 'true') { summaryEl.textContent = ''; return; }
+  const entry = readRowEntry(row, type);
+  const hasData = type === 'cardio'
+    ? [entry.durationMin, entry.distanceKm, entry.calories, entry.avgWatts, entry.avgSpeed, entry.avgIncline].some((v) => v !== null)
+    : (entry.weightKg > 0 || entry.series > 0 || entry.reps > 0);
+  summaryEl.textContent = hasData ? (type === 'cardio' ? formatCardioSummary(entry) : formatStrengthSummary(entry)) : '';
+}
+
+function clearMachineRow(row, type) {
+  const fields = type === 'cardio'
+    ? ['.f-duration', '.f-distance', '.f-calories', '.f-watts', '.f-speed', '.f-incline']
+    : ['.f-weight', '.f-series', '.f-reps'];
+  fields.forEach((sel) => { const el = row.querySelector(sel); if (el) el.value = ''; });
+  const legInput = row.querySelector('.f-perleg');
+  if (legInput) legInput.checked = false;
+  delete row.dataset.touched;
+  updateRowSummary(row, type);
+  row.classList.remove('open');
+}
+
+function toggleRowOpen(row) {
+  const container = row.parentElement;
+  const wasOpen = row.classList.contains('open');
+  $all('.machine-row.open', container).forEach((r) => r.classList.remove('open'));
+  row.classList.toggle('open', !wasOpen);
+  return !wasOpen;
+}
+
+function toggleMachineRow(row, type) {
+  const nowOpen = toggleRowOpen(row);
+  if (nowOpen) {
+    row.dataset.touched = 'true';
+    updateRowSummary(row, type);
+    row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function buildMachineDetail(type, name) {
+  const wrap = document.createElement('div');
+  const last = lastEntry(name, type);
+
+  const lastLine = document.createElement('div');
+  lastLine.className = 'machine-last';
+  lastLine.textContent = last
+    ? `Dernière fois (${formatDateFr(last.date)}) : ${type === 'cardio' ? formatCardioSummary(last.entry) : formatStrengthSummary(last.entry)}`
+    : 'Pas encore enregistré.';
+  wrap.appendChild(lastLine);
+
+  const grid = document.createElement('div');
+  grid.className = 'entry-grid';
+
+  if (type === 'cardio') {
+    grid.innerHTML = `
+      <div class="field-row"><label>Durée (min)</label><input type="number" class="f-duration" inputmode="numeric" min="0"></div>
+      <div class="field-row"><label>Distance (km)</label><input type="number" class="f-distance" step="0.01" inputmode="decimal" min="0"></div>
+      <div class="field-row"><label>Calories</label><input type="number" class="f-calories" inputmode="numeric" min="0"></div>
+      <div class="field-row"><label>Watts moyens</label><input type="number" class="f-watts" inputmode="numeric" min="0"></div>
+      <div class="field-row"><label>Vitesse moy. (km/h)</label><input type="number" class="f-speed" step="0.1" inputmode="decimal" min="0"></div>
+      <div class="field-row"><label>Inclinaison (%)</label><input type="number" class="f-incline" step="0.1" inputmode="decimal" min="0"></div>
+    `;
+    wrap.appendChild(grid);
+    if (last) {
+      const set = (cls, val) => { const el = grid.querySelector(cls); if (val !== null && val !== undefined) el.value = val; };
+      set('.f-duration', last.entry.durationMin);
+      set('.f-distance', last.entry.distanceKm);
+      set('.f-calories', last.entry.calories);
+      set('.f-watts', last.entry.avgWatts);
+      set('.f-speed', last.entry.avgSpeed);
+      set('.f-incline', last.entry.avgIncline);
+    }
+  } else {
+    grid.innerHTML = `
+      <div class="field-row"><label>Charge (kg)</label>${stepperHtml('f-weight', last ? last.entry.weightKg : '', 1)}</div>
+      <div class="field-row"><label>Séries</label>${stepperHtml('f-series', last ? last.entry.series : '', 1)}</div>
+      <div class="field-row"><label>Répétitions</label>${stepperHtml('f-reps', last ? last.entry.reps : '', 1)}</div>
+    `;
+    wrap.appendChild(grid);
+    bindSteppers(grid);
+
+    const legToggle = document.createElement('label');
+    legToggle.className = 'leg-toggle';
+    const legInput = document.createElement('input');
+    legInput.type = 'checkbox';
+    legInput.className = 'f-perleg';
+    legInput.checked = !!(last && last.entry.perLeg);
+    legToggle.appendChild(legInput);
+    legToggle.appendChild(document.createTextNode(' Chaque jambe séparément'));
+    wrap.appendChild(legToggle);
+  }
+
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'machine-clear';
+  clearBtn.textContent = 'Effacer';
+  clearBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearMachineRow(wrap.closest('.machine-row'), type);
+  });
+  wrap.appendChild(clearBtn);
+
+  return wrap;
+}
+
+function buildMachineRow(type, name) {
+  const row = document.createElement('div');
+  row.className = 'machine-row';
+  row.dataset.machine = name;
+
+  const head = document.createElement('button');
+  head.type = 'button';
+  head.className = 'machine-row-head';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'machine-name';
+  nameEl.textContent = name;
+
+  const summaryEl = document.createElement('span');
+  summaryEl.className = 'machine-summary';
+
+  const chevronEl = document.createElement('span');
+  chevronEl.className = 'chevron';
+  chevronEl.textContent = '▾';
+
+  head.append(nameEl, summaryEl, chevronEl);
+  head.addEventListener('click', () => toggleMachineRow(row, type));
+
+  const detail = document.createElement('div');
+  detail.className = 'machine-detail';
+  detail.appendChild(buildMachineDetail(type, name));
+
+  row.append(head, detail);
+  row.addEventListener('input', () => {
+    row.dataset.touched = 'true';
+    updateRowSummary(row, type);
+  });
+
+  return row;
+}
+
+function buildAddMachineRow(type) {
+  const row = document.createElement('div');
+  row.className = 'machine-row machine-add-row';
+
+  const head = document.createElement('button');
+  head.type = 'button';
+  head.className = 'machine-row-head';
+  head.innerHTML = '<span class="machine-name">+ Nouvelle machine</span><span class="chevron">▾</span>';
+  head.addEventListener('click', () => toggleRowOpen(row));
+
+  const form = document.createElement('div');
+  form.className = 'machine-add-form';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Nom de la machine';
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'btn-add';
+  confirmBtn.textContent = 'Ajouter';
+
+  const submitNewMachine = async () => {
+    const name = input.value.trim();
+    if (!name) return;
+    await DB.put('machines', { id: DB.uid(), name, type, lastUsed: null });
+    await reloadAll();
+    renderMachineRows(type);
+    const container = $(type === 'cardio' ? '#cardio-list' : '#strength-list');
+    const newRow = container.querySelector(`.machine-row[data-machine="${CSS.escape(name)}"]`);
+    if (newRow) toggleMachineRow(newRow, type);
+  };
+
+  confirmBtn.addEventListener('click', submitNewMachine);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); submitNewMachine(); }
+  });
+
+  form.append(input, confirmBtn);
+  row.append(head, form);
+  return row;
+}
+
+function renderMachineRows(type) {
+  const container = $(type === 'cardio' ? '#cardio-list' : '#strength-list');
+  container.innerHTML = '';
+  machinesByType(type).forEach((m) => container.appendChild(buildMachineRow(type, m.name)));
+  container.appendChild(buildAddMachineRow(type));
 }
 
 function stepperHtml(cls, value, step) {
@@ -268,49 +422,10 @@ function bindSteppers(root) {
         const current = parseFloat(input.value) || 0;
         const next = Math.max(0, Math.round((current + delta) * 100) / 100);
         input.value = next;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
       });
     });
   });
-}
-
-function addStrengthCard() {
-  const card = document.createElement('div');
-  card.className = 'entry-card';
-  card.innerHTML = `
-    <div class="entry-card-head">
-      <strong>Renforcement</strong>
-      <button type="button" class="entry-remove" aria-label="Supprimer">✕</button>
-    </div>
-  `;
-  const chips = makeChipRow(machinesByType('strength'), (name) => { card.dataset.machine = name; prefillStrength(card, name); });
-  const grid = document.createElement('div');
-  grid.className = 'entry-grid';
-  grid.innerHTML = `
-    <div class="field-row"><label>Charge (kg)</label>${stepperHtml('f-weight', '', 1)}</div>
-    <div class="field-row"><label>Séries</label>${stepperHtml('f-series', '', 1)}</div>
-    <div class="field-row"><label>Répétitions</label>${stepperHtml('f-reps', '', 1)}</div>
-  `;
-  const legToggle = document.createElement('label');
-  legToggle.className = 'leg-toggle';
-  legToggle.innerHTML = `<input type="checkbox" class="f-perleg"> Chaque jambe séparément`;
-
-  card.appendChild(chips);
-  card.appendChild(grid);
-  card.appendChild(legToggle);
-  card.querySelector('.entry-remove').addEventListener('click', () => card.remove());
-  bindSteppers(grid);
-  $('#strength-list').appendChild(card);
-}
-
-function prefillStrength(card, name) {
-  const last = lastEntryForMachine(name, 'strength');
-  if (!last) return;
-  const set = (cls, val) => { const el = card.querySelector(cls); if (el && val !== null && val !== undefined) el.value = val; };
-  set('.f-weight', last.weightKg);
-  set('.f-series', last.series);
-  set('.f-reps', last.reps);
-  const legInput = card.querySelector('.f-perleg');
-  if (legInput) legInput.checked = !!last.perLeg;
 }
 
 /* ============================================================
@@ -323,31 +438,13 @@ async function onSubmitSession(e) {
   const warmupMinutes = num($('#input-warmup').value);
   const note = $('#input-note').value.trim();
 
-  const cardio = $all('#cardio-list .entry-card').map((card) => {
-    const machine = (card.dataset.machine || '').trim();
-    if (!machine) return null;
-    return {
-      machine,
-      durationMin: num(card.querySelector('.f-duration').value),
-      distanceKm: num(card.querySelector('.f-distance').value),
-      calories: num(card.querySelector('.f-calories').value),
-      avgWatts: num(card.querySelector('.f-watts').value),
-      avgSpeed: num(card.querySelector('.f-speed').value),
-      avgIncline: num(card.querySelector('.f-incline').value),
-    };
-  }).filter(Boolean);
+  const cardio = $all('#cardio-list .machine-row[data-touched="true"]')
+    .map((row) => readRowEntry(row, 'cardio'))
+    .filter((c) => [c.durationMin, c.distanceKm, c.calories, c.avgWatts, c.avgSpeed, c.avgIncline].some((v) => v !== null));
 
-  const strength = $all('#strength-list .entry-card').map((card) => {
-    const machine = (card.dataset.machine || '').trim();
-    if (!machine) return null;
-    return {
-      machine,
-      weightKg: num(card.querySelector('.f-weight').value) || 0,
-      series: num(card.querySelector('.f-series').value) || 0,
-      reps: num(card.querySelector('.f-reps').value) || 0,
-      perLeg: card.querySelector('.f-perleg').checked,
-    };
-  }).filter(Boolean);
+  const strength = $all('#strength-list .machine-row[data-touched="true"]')
+    .map((row) => readRowEntry(row, 'strength'))
+    .filter((e) => e.weightKg > 0 || e.series > 0 || e.reps > 0);
 
   if (cardio.length === 0 && strength.length === 0) {
     toast('Ajoute au moins un exercice avant d’enregistrer.');
@@ -372,17 +469,14 @@ async function onSubmitSession(e) {
   };
   await DB.put('sessions', session);
 
-  // Update machine recency + auto-create unseen machine names
+  // Refresh recency (every touched machine already exists in DB by construction)
   const usedNames = new Set([...cardio.map((c) => c.machine), ...strength.map((s) => s.machine)]);
   for (const name of usedNames) {
-    const type = strength.some((s) => s.machine === name) ? 'strength' : 'cardio';
-    let m = state.machines.find((mm) => mm.name.toLowerCase() === name.toLowerCase());
-    if (!m) {
-      m = { id: DB.uid(), name, type, lastUsed: Date.now() };
-    } else {
+    const m = state.machines.find((mm) => mm.name.toLowerCase() === name.toLowerCase());
+    if (m) {
       m.lastUsed = Date.now();
+      await DB.put('machines', m);
     }
-    await DB.put('machines', m);
   }
 
   await reloadAll();
@@ -399,8 +493,9 @@ function resetSessionForm() {
   $('#input-date').value = todayIso();
   $('#input-warmup').value = '';
   $('#input-note').value = '';
-  $('#cardio-list').innerHTML = '';
-  $('#strength-list').innerHTML = '';
+  renderMachineRows('cardio');
+  renderMachineRows('strength');
+  $all('.category').forEach((c) => c.classList.remove('open'));
   $('#btn-save-session').textContent = 'Enregistrer la séance';
 }
 
@@ -420,18 +515,10 @@ function renderHistory() {
     const lines = [];
     if (s.warmupMinutes) lines.push(`Échauffement : ${s.warmupMinutes} min`);
     (s.cardio || []).forEach((c) => {
-      const parts = [];
-      if (c.durationMin) parts.push(`${c.durationMin} min`);
-      if (c.distanceKm) parts.push(`${c.distanceKm} km`);
-      if (c.calories) parts.push(`${c.calories} cal`);
-      if (c.avgWatts) parts.push(`${c.avgWatts} W`);
-      if (c.avgSpeed) parts.push(`${c.avgSpeed} km/h`);
-      if (c.avgIncline) parts.push(`${c.avgIncline}% incl.`);
-      lines.push(`${c.machine} — ${parts.join(' / ')}`);
+      lines.push(`${c.machine} — ${formatCardioSummary(c)}`);
     });
     (s.strength || []).forEach((e) => {
-      const leg = e.perLeg ? ' chaque jambe' : '';
-      lines.push(`${e.machine} ${e.weightKg}kg — ${e.series}x${e.reps}${leg}`);
+      lines.push(`${e.machine} ${formatStrengthSummary(e)}`);
     });
     if (s.note) lines.push(`Note : ${s.note}`);
 
@@ -464,34 +551,42 @@ function loadSessionIntoForm(s) {
   $('#input-date').value = s.date;
   $('#input-warmup').value = s.warmupMinutes ?? '';
   $('#input-note').value = s.note || '';
-  $('#cardio-list').innerHTML = '';
-  $('#strength-list').innerHTML = '';
 
-  (s.cardio || []).forEach((c) => {
-    addCardioCard();
-    const card = $('#cardio-list .entry-card:last-child');
-    card.dataset.machine = c.machine;
-    card.querySelector('.f-duration').value = c.durationMin ?? '';
-    card.querySelector('.f-distance').value = c.distanceKm ?? '';
-    card.querySelector('.f-calories').value = c.calories ?? '';
-    card.querySelector('.f-watts').value = c.avgWatts ?? '';
-    card.querySelector('.f-speed').value = c.avgSpeed ?? '';
-    card.querySelector('.f-incline').value = c.avgIncline ?? '';
-    const chip = card.querySelector(`.chip[data-machine="${CSS.escape(c.machine)}"]`);
-    if (chip) chip.classList.add('selected');
-  });
+  renderMachineRows('cardio');
+  renderMachineRows('strength');
 
-  (s.strength || []).forEach((e) => {
-    addStrengthCard();
-    const card = $('#strength-list .entry-card:last-child');
-    card.dataset.machine = e.machine;
-    card.querySelector('.f-weight').value = e.weightKg ?? '';
-    card.querySelector('.f-series').value = e.series ?? '';
-    card.querySelector('.f-reps').value = e.reps ?? '';
-    card.querySelector('.f-perleg').checked = !!e.perLeg;
-    const chip = card.querySelector(`.chip[data-machine="${CSS.escape(e.machine)}"]`);
-    if (chip) chip.classList.add('selected');
-  });
+  const fillRow = (containerSel, entry, type) => {
+    const container = $(containerSel);
+    let row = container.querySelector(`.machine-row[data-machine="${CSS.escape(entry.machine)}"]`);
+    if (!row) {
+      // Machine may have been deleted from Réglages since — recreate its row so data isn't lost.
+      row = buildMachineRow(type, entry.machine);
+      container.insertBefore(row, container.querySelector('.machine-add-row'));
+    }
+    const set = (cls, val) => { const el = row.querySelector(cls); if (el) el.value = val ?? ''; };
+    if (type === 'cardio') {
+      set('.f-duration', entry.durationMin);
+      set('.f-distance', entry.distanceKm);
+      set('.f-calories', entry.calories);
+      set('.f-watts', entry.avgWatts);
+      set('.f-speed', entry.avgSpeed);
+      set('.f-incline', entry.avgIncline);
+    } else {
+      set('.f-weight', entry.weightKg);
+      set('.f-series', entry.series);
+      set('.f-reps', entry.reps);
+      const legInput = row.querySelector('.f-perleg');
+      if (legInput) legInput.checked = !!entry.perLeg;
+    }
+    row.dataset.touched = 'true';
+    updateRowSummary(row, type);
+  };
+
+  (s.cardio || []).forEach((c) => fillRow('#cardio-list', c, 'cardio'));
+  (s.strength || []).forEach((e) => fillRow('#strength-list', e, 'strength'));
+
+  $('.category[data-type="cardio"]').classList.toggle('open', (s.cardio || []).length > 0);
+  $('.category[data-type="strength"]').classList.toggle('open', (s.strength || []).length > 0);
 
   $('#btn-save-session').textContent = 'Mettre à jour la séance';
   switchView('seance');
@@ -577,7 +672,7 @@ function openSettingsSheet() {
     .sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name))
     .forEach((m) => {
       const row = document.createElement('div');
-      row.className = 'machine-row';
+      row.className = 'settings-machine-row';
       row.innerHTML = `<span>${m.name} <span style="color:var(--text-muted);font-size:11px;">(${m.type === 'cardio' ? 'cardio' : 'muscu'})</span></span>`;
       const del = document.createElement('button');
       del.type = 'button';
