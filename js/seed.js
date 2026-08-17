@@ -3,6 +3,7 @@
 const DEFAULT_MACHINES = [
   { name: 'Heliptic', type: 'cardio' },
   { name: 'Tapis de marche', type: 'cardio' },
+  { name: 'ClimbMill', type: 'cardio' },
   { name: 'Press', type: 'strength' },
   { name: 'Hip adductor', type: 'strength' },
   { name: 'Abductor', type: 'strength' },

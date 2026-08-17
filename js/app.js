@@ -184,6 +184,8 @@ function formatCardioSummary(entry) {
   if (entry.avgWatts) parts.push(`${entry.avgWatts} W`);
   if (entry.avgSpeed) parts.push(`${entry.avgSpeed} km/h`);
   if (entry.avgIncline) parts.push(`${entry.avgIncline}% incl.`);
+  if (entry.steps) parts.push(`${entry.steps} pas`);
+  if (entry.floors) parts.push(`${entry.floors} étages`);
   return parts.join(' / ');
 }
 
@@ -202,6 +204,8 @@ function readRowEntry(row, type) {
       avgWatts: num(row.querySelector('.f-watts').value),
       avgSpeed: num(row.querySelector('.f-speed').value),
       avgIncline: num(row.querySelector('.f-incline').value),
+      steps: num(row.querySelector('.f-steps').value),
+      floors: num(row.querySelector('.f-floors').value),
     };
   }
   return {
@@ -219,14 +223,14 @@ function updateRowSummary(row, type) {
   if (row.dataset.touched !== 'true') { summaryEl.textContent = ''; return; }
   const entry = readRowEntry(row, type);
   const hasData = type === 'cardio'
-    ? [entry.durationMin, entry.distanceKm, entry.calories, entry.avgWatts, entry.avgSpeed, entry.avgIncline].some((v) => v !== null)
+    ? [entry.durationMin, entry.distanceKm, entry.calories, entry.avgWatts, entry.avgSpeed, entry.avgIncline, entry.steps, entry.floors].some((v) => v !== null)
     : (entry.weightKg > 0 || entry.series > 0 || entry.reps > 0);
   summaryEl.textContent = hasData ? (type === 'cardio' ? formatCardioSummary(entry) : formatStrengthSummary(entry)) : '';
 }
 
 function clearMachineRow(row, type) {
   const fields = type === 'cardio'
-    ? ['.f-duration', '.f-distance', '.f-calories', '.f-watts', '.f-speed', '.f-incline']
+    ? ['.f-duration', '.f-distance', '.f-calories', '.f-watts', '.f-speed', '.f-incline', '.f-steps', '.f-floors']
     : ['.f-weight', '.f-series', '.f-reps'];
   fields.forEach((sel) => { const el = row.querySelector(sel); if (el) el.value = ''; });
   const legInput = row.querySelector('.f-perleg');
@@ -275,6 +279,8 @@ function buildMachineDetail(type, name) {
       <div class="field-row"><label>Watts moyens</label><input type="number" class="f-watts" inputmode="numeric" min="0"></div>
       <div class="field-row"><label>Vitesse moy. (km/h)</label><input type="number" class="f-speed" step="0.1" inputmode="decimal" min="0"></div>
       <div class="field-row"><label>Inclinaison (%)</label><input type="number" class="f-incline" step="0.1" inputmode="decimal" min="0"></div>
+      <div class="field-row"><label>Pas</label><input type="number" class="f-steps" inputmode="numeric" min="0"></div>
+      <div class="field-row"><label>Étages</label><input type="number" class="f-floors" inputmode="numeric" min="0"></div>
     `;
     wrap.appendChild(grid);
     if (last) {
@@ -285,6 +291,8 @@ function buildMachineDetail(type, name) {
       set('.f-watts', last.entry.avgWatts);
       set('.f-speed', last.entry.avgSpeed);
       set('.f-incline', last.entry.avgIncline);
+      set('.f-steps', last.entry.steps);
+      set('.f-floors', last.entry.floors);
     }
   } else {
     grid.innerHTML = `
@@ -439,7 +447,7 @@ async function onSubmitSession(e) {
 
   const cardio = $all('#cardio-list .machine-row[data-touched="true"]')
     .map((row) => readRowEntry(row, 'cardio'))
-    .filter((c) => [c.durationMin, c.distanceKm, c.calories, c.avgWatts, c.avgSpeed, c.avgIncline].some((v) => v !== null));
+    .filter((c) => [c.durationMin, c.distanceKm, c.calories, c.avgWatts, c.avgSpeed, c.avgIncline, c.steps, c.floors].some((v) => v !== null));
 
   const strength = $all('#strength-list .machine-row[data-touched="true"]')
     .map((row) => readRowEntry(row, 'strength'))
@@ -568,6 +576,8 @@ function loadSessionIntoForm(s) {
       set('.f-watts', entry.avgWatts);
       set('.f-speed', entry.avgSpeed);
       set('.f-incline', entry.avgIncline);
+      set('.f-steps', entry.steps);
+      set('.f-floors', entry.floors);
     } else {
       set('.f-weight', entry.weightKg);
       set('.f-series', entry.series);
