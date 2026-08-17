@@ -435,7 +435,6 @@ async function onSubmitSession(e) {
   e.preventDefault();
 
   const date = $('#input-date').value || todayIso();
-  const warmupMinutes = num($('#input-warmup').value);
   const note = $('#input-note').value.trim();
 
   const cardio = $all('#cardio-list .machine-row[data-touched="true"]')
@@ -465,7 +464,7 @@ async function onSubmitSession(e) {
 
   const session = {
     id: state.editingSessionId || DB.uid(),
-    date, warmupMinutes, note, cardio, strength,
+    date, note, cardio, strength,
   };
   await DB.put('sessions', session);
 
@@ -491,7 +490,6 @@ async function onSubmitSession(e) {
 function resetSessionForm() {
   state.editingSessionId = null;
   $('#input-date').value = todayIso();
-  $('#input-warmup').value = '';
   $('#input-note').value = '';
   renderMachineRows('cardio');
   renderMachineRows('strength');
@@ -549,7 +547,6 @@ function renderHistory() {
 function loadSessionIntoForm(s) {
   state.editingSessionId = s.id;
   $('#input-date').value = s.date;
-  $('#input-warmup').value = s.warmupMinutes ?? '';
   $('#input-note').value = s.note || '';
 
   renderMachineRows('cardio');
