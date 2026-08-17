@@ -67,25 +67,42 @@
 
   <!-- ===================== VUE STATS ===================== -->
   <section id="view-stats" class="view view-hidden" data-view="stats">
+    <div class="stats-period">
+      <button type="button" id="period-prev" class="period-nav" aria-label="Période précédente">◀</button>
+      <div class="period-center">
+        <div class="segmented" id="period-mode">
+          <button type="button" class="seg-btn active" data-mode="week">Semaine</button>
+          <button type="button" class="seg-btn" data-mode="month">Mois</button>
+        </div>
+        <div id="period-label" class="period-label"></div>
+      </div>
+      <button type="button" id="period-next" class="period-nav" aria-label="Période suivante">▶</button>
+    </div>
+
     <div class="stats-block">
       <h2>Volume total</h2>
-      <div class="segmented" id="volume-range">
-        <button type="button" class="seg-btn active" data-range="week">Semaine</button>
-        <button type="button" class="seg-btn" data-range="month">Mois</button>
-      </div>
+      <p class="stats-hint">Charge totale soulevée : poids × séries × répétitions, cumulés.</p>
       <div class="chart-wrap"><canvas id="chart-volume"></canvas></div>
     </div>
 
     <div class="stats-block">
       <h2>Progression par machine</h2>
-      <select id="select-machine-stats"></select>
-      <div class="chart-wrap"><canvas id="chart-machine"></canvas></div>
+      <div class="chart-wrap chart-wrap-tall"><canvas id="chart-machine"></canvas></div>
     </div>
 
     <div class="stats-block">
       <h2>Évolution cardio</h2>
-      <select id="select-cardio-stats"></select>
-      <div class="chart-wrap"><canvas id="chart-cardio"></canvas></div>
+      <select id="select-cardio-metric">
+        <option value="durationMin">Durée (min)</option>
+        <option value="distanceKm">Distance (km)</option>
+        <option value="calories">Calories</option>
+        <option value="avgWatts">Watts moyens</option>
+        <option value="avgSpeed">Vitesse moy. (km/h)</option>
+        <option value="avgIncline">Inclinaison (%)</option>
+        <option value="steps">Pas</option>
+        <option value="floors">Étages</option>
+      </select>
+      <div class="chart-wrap chart-wrap-tall"><canvas id="chart-cardio"></canvas></div>
     </div>
 
     <div class="stats-block">

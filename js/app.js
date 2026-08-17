@@ -11,6 +11,7 @@ const state = {
 };
 
 const MONTHS_FR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const DAYS_FR_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 /* ============================================================
    Helpers
@@ -29,6 +30,33 @@ function formatDateFr(iso) {
   return `${d} ${MONTHS_FR[m - 1]} ${y}`;
 }
 
+function addDaysIso(iso, days) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function mondayOf(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const dayNum = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - dayNum);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatShortDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${d} ${MONTHS_FR[m - 1]}`;
+}
+
+function formatShortDay(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const dayNum = (date.getUTCDay() + 6) % 7;
+  return `${DAYS_FR_SHORT[dayNum]} ${d}`;
+}
+
 function isoWeekKey(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   const date = new Date(Date.UTC(y, m - 1, d));
@@ -39,16 +67,6 @@ function isoWeekKey(iso) {
     ((date - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7
   );
   return `${date.getUTCFullYear()}-S${String(weekNum).padStart(2, '0')}`;
-}
-
-function monthKey(iso) {
-  const [y, m] = iso.split('-').map(Number);
-  return `${y}-${String(m).padStart(2, '0')}`;
-}
-
-function monthLabel(key) {
-  const [y, m] = key.split('-').map(Number);
-  return `${MONTHS_FR[m - 1]} ${y}`;
 }
 
 function num(val) {
@@ -69,6 +87,12 @@ function machinesByType(type) {
   return state.machines
     .filter((m) => m.type === type)
     .sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
+}
+
+function colorForMachine(name, type) {
+  const all = state.machines.filter((m) => m.type === type).map((m) => m.name).sort();
+  const idx = all.indexOf(name);
+  return Charts.paletteColor(idx < 0 ? 0 : idx);
 }
 
 function sessionVolume(session) {
@@ -99,7 +123,6 @@ async function boot() {
   renderHistory();
   renderWeights();
   updateWeightReminder();
-  populateStatsSelectors();
   renderAllCharts();
 
   if ('serviceWorker' in navigator) {
@@ -489,7 +512,6 @@ async function onSubmitSession(e) {
   await reloadAll();
   resetSessionForm();
   renderHistory();
-  populateStatsSelectors();
 
   const prMsg = prMachines.length ? ` 🎉 Record sur ${prMachines.join(', ')} !` : '';
   toast(`Séance enregistrée.${prMsg}`);
@@ -545,7 +567,6 @@ function renderHistory() {
       await DB.delete('sessions', s.id);
       await reloadAll();
       renderHistory();
-      populateStatsSelectors();
       renderAllCharts();
     });
     container.appendChild(card);
@@ -786,7 +807,6 @@ async function importData(file) {
     renderHistory();
     renderWeights();
     updateWeightReminder();
-    populateStatsSelectors();
     renderAllCharts();
     toast('Données importées avec succès.');
   } catch (err) {
@@ -797,37 +817,54 @@ async function importData(file) {
 /* ============================================================
    Stats
    ============================================================ */
-let volumeRange = 'week';
+let statsMode = 'week';
+let statsOffset = 0;
 
-function bindStatsControls() {
-  $all('#volume-range .seg-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      $all('#volume-range .seg-btn').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      volumeRange = btn.dataset.range;
-      renderVolumeChart();
-    });
-  });
-  $('#select-machine-stats').addEventListener('change', renderMachineChart);
-  $('#select-cardio-stats').addEventListener('change', renderCardioChart);
+function getPeriodDates() {
+  const thisMonday = mondayOf(todayIso());
+  if (statsMode === 'week') {
+    const weekStart = addDaysIso(thisMonday, statsOffset * 7);
+    return Array.from({ length: 7 }, (_, i) => addDaysIso(weekStart, i));
+  }
+  const lastWeekStart = addDaysIso(thisMonday, statsOffset * 7);
+  return Array.from({ length: 4 }, (_, i) => addDaysIso(lastWeekStart, (i - 3) * 7));
 }
 
-function populateStatsSelectors() {
-  const machineSel = $('#select-machine-stats');
-  const cardioSel = $('#select-cardio-stats');
-  const strengthNames = [...new Set(state.sessions.flatMap((s) => (s.strength || []).map((e) => e.machine)))].sort();
-  const cardioNames = [...new Set(state.sessions.flatMap((s) => (s.cardio || []).map((e) => e.machine)))].sort();
+function periodLabels(dates) {
+  return dates.map(statsMode === 'week' ? formatShortDay : formatShortDate);
+}
 
-  const fillSelect = (sel, names) => {
-    const prev = sel.value;
-    sel.innerHTML = names.map((n) => `<option value="${n}">${n}</option>`).join('');
-    if (names.includes(prev)) sel.value = prev;
-  };
-  fillSelect(machineSel, strengthNames);
-  fillSelect(cardioSel, cardioNames);
+function updatePeriodLabel() {
+  const dates = getPeriodDates();
+  const start = dates[0];
+  const end = statsMode === 'week' ? dates[6] : addDaysIso(dates[3], 6);
+  $('#period-label').textContent = `${formatShortDate(start)} – ${formatShortDate(end)}`;
+  $('#period-next').disabled = statsOffset >= 0;
+}
+
+function bindStatsControls() {
+  $all('#period-mode .seg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      $all('#period-mode .seg-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      statsMode = btn.dataset.mode;
+      statsOffset = 0;
+      renderAllCharts();
+    });
+  });
+  $('#period-prev').addEventListener('click', () => {
+    statsOffset -= statsMode === 'week' ? 1 : 4;
+    renderAllCharts();
+  });
+  $('#period-next').addEventListener('click', () => {
+    statsOffset = Math.min(0, statsOffset + (statsMode === 'week' ? 1 : 4));
+    renderAllCharts();
+  });
+  $('#select-cardio-metric').addEventListener('change', renderCardioChart);
 }
 
 function renderAllCharts() {
+  updatePeriodLabel();
   renderVolumeChart();
   renderMachineChart();
   renderCardioChart();
@@ -835,47 +872,59 @@ function renderAllCharts() {
 }
 
 function renderVolumeChart() {
-  const keyFn = volumeRange === 'week' ? isoWeekKey : monthKey;
-  const labelFn = volumeRange === 'week' ? (k) => k.replace('-S', ' S') : monthLabel;
-  const buckets = new Map();
-  state.sessions.forEach((s) => {
-    const key = keyFn(s.date);
-    buckets.set(key, (buckets.get(key) || 0) + sessionVolume(s));
-  });
-  const keys = [...buckets.keys()].sort();
-  Charts.renderBar('chart-volume', keys.map(labelFn), keys.map((k) => Math.round(buckets.get(k))), 'Volume (kg)');
+  const dates = getPeriodDates();
+  if (statsMode === 'week') {
+    const data = dates.map((d) => Math.round(
+      state.sessions.filter((s) => s.date === d).reduce((sum, s) => sum + sessionVolume(s), 0)
+    ));
+    Charts.renderBar('chart-volume', periodLabels(dates), data, 'Volume (kg)');
+  } else {
+    const data = dates.map((weekStart) => {
+      const weekEnd = addDaysIso(weekStart, 6);
+      return Math.round(
+        state.sessions
+          .filter((s) => s.date >= weekStart && s.date <= weekEnd)
+          .reduce((sum, s) => sum + sessionVolume(s), 0)
+      );
+    });
+    Charts.renderBar('chart-volume', periodLabels(dates), data, 'Volume (kg)');
+  }
+}
+
+function seriesForPeriod(dates, names, extractValues, aggregate) {
+  return names.map((name) => {
+    const data = dates.map((d) => {
+      const range = statsMode === 'week' ? [d, d] : [d, addDaysIso(d, 6)];
+      const values = state.sessions
+        .filter((s) => s.date >= range[0] && s.date <= range[1])
+        .flatMap((s) => extractValues(s, name));
+      return values.length ? aggregate(values) : null;
+    });
+    return data.some((v) => v !== null) ? { label: name, data } : null;
+  }).filter(Boolean);
 }
 
 function renderMachineChart() {
-  const machine = $('#select-machine-stats').value;
-  if (!machine) { Charts.clear('chart-machine'); return; }
-  const points = state.sessions
-    .filter((s) => (s.strength || []).some((e) => e.machine === machine))
-    .map((s) => {
-      const best = Math.max(...s.strength.filter((e) => e.machine === machine).map((e) => e.weightKg || 0));
-      return { date: s.date, value: best };
-    })
-    .sort((a, b) => a.date.localeCompare(b.date));
-  Charts.renderLine('chart-machine', points.map((p) => formatDateFr(p.date)), points.map((p) => p.value), 'Charge (kg)');
+  const dates = getPeriodDates();
+  const names = [...new Set(state.sessions.flatMap((s) => (s.strength || []).map((e) => e.machine)))].sort();
+  const series = seriesForPeriod(
+    dates, names,
+    (s, name) => (s.strength || []).filter((e) => e.machine === name).map((e) => e.weightKg || 0),
+    (values) => Math.max(...values)
+  ).map((s) => ({ ...s, color: colorForMachine(s.label, 'strength') }));
+  Charts.renderMultiLine('chart-machine', periodLabels(dates), series);
 }
 
 function renderCardioChart() {
-  const machine = $('#select-cardio-stats').value;
-  if (!machine) { Charts.clear('chart-cardio'); return; }
-  const points = state.sessions
-    .filter((s) => (s.cardio || []).some((e) => e.machine === machine))
-    .map((s) => {
-      const entry = s.cardio.find((e) => e.machine === machine);
-      return { date: s.date, distance: entry.distanceKm || 0, calories: entry.calories || 0 };
-    })
-    .sort((a, b) => a.date.localeCompare(b.date));
-  Charts.renderDualLine(
-    'chart-cardio',
-    points.map((p) => formatDateFr(p.date)),
-    points.map((p) => p.distance),
-    points.map((p) => p.calories),
-    'Distance (km)', 'Calories'
-  );
+  const metric = $('#select-cardio-metric').value;
+  const dates = getPeriodDates();
+  const names = [...new Set(state.sessions.flatMap((s) => (s.cardio || []).map((e) => e.machine)))].sort();
+  const series = seriesForPeriod(
+    dates, names,
+    (s, name) => (s.cardio || []).filter((e) => e.machine === name).map((e) => e[metric]).filter((v) => v !== null && v !== undefined),
+    (values) => Math.round(values.reduce((a, b) => a + b, 0) * 100) / 100
+  ).map((s) => ({ ...s, color: colorForMachine(s.label, 'cardio') }));
+  Charts.renderMultiLine('chart-cardio', periodLabels(dates), series);
 }
 
 function renderWeightChart() {

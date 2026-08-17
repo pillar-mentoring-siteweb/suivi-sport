@@ -7,6 +7,12 @@ const Charts = (() => {
   const ACCENT_SOFT = 'rgba(249, 115, 22, 0.15)';
   const SECONDARY = '#0ea5e9';
 
+  const PALETTE = ['#f97316', '#0ea5e9', '#16a34a', '#a855f7', '#e11d48', '#ca8a04', '#0891b2', '#7c3aed', '#65a30d', '#db2777'];
+
+  function paletteColor(i) {
+    return PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length];
+  }
+
   function destroy(canvasId) {
     if (instances[canvasId]) {
       instances[canvasId].destroy();
@@ -86,7 +92,33 @@ const Charts = (() => {
     });
   }
 
-  return { renderBar, renderLine, renderDualLine, clear };
+  function renderMultiLine(canvasId, labels, series) {
+    destroy(canvasId);
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    if (labels.length === 0 || series.length === 0) return;
+    const opts = baseOptions();
+    opts.plugins.legend.display = true;
+    opts.plugins.legend.labels = { font: { size: 10 }, boxWidth: 12 };
+    instances[canvasId] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: series.map((s) => ({
+          label: s.label,
+          data: s.data,
+          borderColor: s.color,
+          backgroundColor: s.color,
+          tension: 0.3,
+          pointRadius: 3,
+          fill: false,
+        })),
+      },
+      options: opts,
+    });
+  }
+
+  return { renderBar, renderLine, renderDualLine, renderMultiLine, paletteColor, clear };
 })();
 
 window.Charts = Charts;
